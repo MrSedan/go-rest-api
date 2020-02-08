@@ -31,6 +31,8 @@ func (s *Store) Open() error {
 		return err
 	}
 
+	s.db = db
+
 	return nil
 }
 
