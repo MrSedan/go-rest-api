@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -13,11 +14,13 @@ import (
 )
 
 const (
-	sessionName = "MyChat"
+	sessionName        = "MyChat"
+	ctxKeyUser  ctxKey = iota
 )
 
 var (
 	errIncorrectEmailOrPassword = errors.New("incorrect email or password")
+	errNoAunthenticated         = errors.New("not authenticated")
 )
 
 type server struct {
@@ -26,6 +29,8 @@ type server struct {
 	store        store.Store
 	sessionStore sessions.Store
 }
+
+type ctxKey int8
 
 func newServer(store store.Store, sessionStore sessions.Store) *server {
 	s := &server{
@@ -47,6 +52,28 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *server) configureRouter() {
 	s.router.HandleFunc("/users", s.handleUsersCreate()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handleSessionsCreate()).Methods("POST")
+}
+
+func (s *server) authenticateUser(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.error(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		id, ok := session.Values["user_id"]
+		if !ok {
+			s.error(w, r, http.StatusUnauthorized, errNoAunthenticated)
+			return
+		}
+		u, err := s.store.User().Find(id.(int))
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, errNoAunthenticated)
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKeyUser, u)))
+	}
 }
 
 func (s *server) handleUsersCreate() http.HandlerFunc {
