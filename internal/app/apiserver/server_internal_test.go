@@ -37,6 +37,7 @@ func TestServer_AuthenticateUser(t *testing.T) {
 			expectedCode: http.StatusUnauthorized,
 		},
 	}
+
 	secretKey := []byte("secret")
 	s := newServer(store, sessions.NewCookieStore(secretKey))
 	sc := securecookie.New(secretKey, nil)
